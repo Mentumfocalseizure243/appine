@@ -268,7 +268,7 @@ static void appine_add_tab(id<AppineBackend> backend);
     // 发送给整个进程，让 Emacs 的主线程去捕获它
     kill(getpid(), SIGUSR1);
 }
-- (void)newTab:(id)sender { (void)sender; appine_add_tab(appine_create_web_backend(@"https://example.com")); }
+- (void)newTab:(id)sender { (void)sender; appine_add_tab(appine_create_web_backend(@"https://google.com")); }
 - (void)closeTab:(id)sender { (void)sender; appine_core_close_active_tab(); }
 - (void)openFile:(id)sender {
     (void)sender;
@@ -484,7 +484,7 @@ static void appine_add_tab(id<AppineBackend> backend) {
 #pragma mark - C API Exports
 
 int appine_core_open_web_in_rect(const char *url, int x, int y, int w, int h) {
-    NSString *urlString = url ? [NSString stringWithUTF8String:url] : @"https://example.com";
+    NSString *urlString = url ? [NSString stringWithUTF8String:url] : @"https://google.com";
     dispatch_async(dispatch_get_main_queue(), ^{
         appine_state().targetRect = NSMakeRect(x, y, w, h);
         appine_ensure_container();

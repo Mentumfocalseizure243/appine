@@ -5,7 +5,7 @@
 ;; Author: Huang Chao <huangchao.cpp@gmail.com>
 ;; Copyright (C) 2026, Huang Chao, all rights reserved.
 ;; Created: 2026-03-15 19:35:21
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/chaoswork/appine
 ;; Keywords: tools, multimedia, convenience, macos
@@ -56,8 +56,8 @@
 
 (require 'url)
 
-(defconst appine-github-repo "chaoswork/appine-dev")
-(defconst appine-version "0.0.1") ;; 记得打 tag 以使用 github action
+(defconst appine-github-repo "chaoswork/appine")
+(defconst appine-version "0.0.2") ;; 记得打 tag 以使用 github action
 
 
 ;; 加载模块
@@ -125,24 +125,29 @@
     success))
 
 (defun appine-ensure-module ()
-  "确保动态模块存在。按顺序尝试：1.加载本地 2.下载预编译 3.本地编译。"
+  "确保动态模块存在。如果不存在，询问是否下载预编译版本，选择是则尝试下载，否则直接本地编译。"
   (let* ((dir (file-name-directory (or load-file-name buffer-file-name)))
          (module-file (expand-file-name "appine-module.dylib" dir))
-         ;; 请将这里的 URL 替换为你真实的 GitHub Release 下载链接
          (download-url (format "https://github.com/%s/releases/download/v%s/appine-module.dylib"
                                appine-github-repo appine-version)))
     
-    ;; 1. 如果文件不存在，尝试下载
+    ;; 1. 如果文件不存在，处理获取逻辑
     (unless (file-exists-p module-file)
-      (message "[Appine] 未找到本地模块，准备获取...")
-      (if (appine--download-module download-url module-file)
-          ;; 下载成功后，立刻尝试移除 macOS 的隔离属性
-          (appine--remove-quarantine module-file)
-        ;; 2. 如果下载失败（超时或网络错误），回退到本地编译
-        (message "[Appine] 下载预编译模块失败，回退到本地编译...")
+      ;; 询问用户是否下载预编译版本
+      (if (y-or-n-p "[Appine] 未找到本地模块，是否尝试从 GitHub 下载预编译版本？")
+          (progn
+            (message "[Appine] 准备下载预编译模块...")
+            (if (appine--download-module download-url module-file)
+                ;; 下载成功后，立刻尝试移除 macOS 的隔离属性
+                (appine--remove-quarantine module-file)
+              ;; 如果下载失败（超时或网络错误），回退到本地编译
+              (message "[Appine] 下载预编译模块失败，回退到本地编译...")
+              (appine--compile-module)))
+        ;; 用户选择不下载（选 n），直接进入本地编译
+        (message "[Appine] 跳过下载，直接开始本地编译...")
         (appine--compile-module)))
     
-    ;; 3. 加载模块
+    ;; 2. 加载模块
     (if (file-exists-p module-file)
         (condition-case err
             (progn
@@ -281,7 +286,7 @@
     (appine--update-active-keymap)
     (when (featurep 'appine-module)
       (ignore-errors
-        (appine-set-active (if flag 1 0))))))
+        (appine-native-set-active (if flag 1 0))))))
 
 (defun appine--sync-active-state ()
   (when (appine--window-live-p)
@@ -297,7 +302,7 @@
   (interactive)
   (when (appine--window-live-p)
     (pcase-let* ((`(,x ,y ,w ,h) (appine--window-pixel-rect appine--window)))
-      (appine-move-resize x y w h))))
+      (appine-native-move-resize x y w h))))
 
 (defun appine-focus ()
   "Activate appine native interaction."
@@ -305,45 +310,45 @@
   (when (appine--window-live-p)
     (select-window appine--window)
     (appine--set-active t)
-    (appine-focus)))
+    (appine-native-focus)))
 
 (defun appine-unfocus ()
   "Deactivate appine native interaction."
   (interactive)
   (when (appine--window-live-p)
     (appine--set-active nil)
-    (appine-unfocus)))
+    (appine-native-unfocus)))
 
-(defun appine-action (name)
+(defun appine-native-action (name)
   "Perform native appine action NAME."
   (when (appine--window-live-p)
-    (appine-focus)
-    (appine-perform-action name)))
+    (appine-native-focus)
+    (appine-native-perform-action name)))
 
 (defun appine-copy ()
   "Native copy for active appine."
   (interactive)
-  (appine-action "copy"))
+  (appine-native-action "copy"))
 
 (defun appine-paste ()
   "Native paste for active appine."
   (interactive)
-  (appine-action "paste"))
+  (appine-native-action "paste"))
 
 (defun appine-cut ()
   "Native cut for active appine."
   (interactive)
-  (appine-action "cut"))
+  (appine-native-action "cut"))
 
 (defun appine-undo ()
   "Native undo for active appine."
   (interactive)
-  (appine-action "undo"))
+  (appine-native-action "undo"))
 
 (defun appine-find ()
   "Native find for active appine."
   (interactive)
-  (appine-action "find"))
+  (appine-native-action "find"))
 
 (defun appine-new-tab ()
   "Open a new default web tab in appine."
@@ -356,7 +361,7 @@
   "Open a file chooser in appine."
   (interactive)
   (when (appine--window-live-p)
-    (appine-action "open-file")
+    (appine-native-action "open-file")
     (appine--set-active t)))
 
 (defun appine-open-web-split (url)
@@ -368,7 +373,7 @@
     (setq url (concat "https://" url)))
   
   (pcase-let* ((`(,x ,y ,w ,h) (appine--rect)))
-    (appine-open-web-in-rect url x y w h)
+    (appine-native-open-web-in-rect url x y w h)
     ;; 强制将 Emacs 的光标焦点移动到 appine 窗口
     (select-window appine--window)
     (appine--set-active t)))
@@ -377,7 +382,7 @@
   "Split window on the right and open PATH in a new embedded native PDF tab."
   (interactive "fPDF file: ")
   (pcase-let* ((`(,x ,y ,w ,h) (appine--rect)))
-    (appine-open-pdf-in-rect (expand-file-name path) x y w h)
+    (appine-native-open-pdf-in-rect (expand-file-name path) x y w h)
     ;; 强制将 Emacs 的光标焦点移动到 appine 窗口
     (select-window appine--window)
     (appine--set-active t)))
@@ -386,27 +391,27 @@
   "Close current embedded native tab."
   (interactive)
   (when (appine--window-live-p)
-    (appine-close-active-tab)
+    (appine-native-close-active-tab)
     (appine-refresh)))
 
 (defun appine-next-tab ()
   "Select next embedded native tab."
   (interactive)
   (when (appine--window-live-p)
-    (appine-select-next-tab)
+    (appine-native-select-next-tab)
     (appine-refresh)))
 
 (defun appine-prev-tab ()
   "Select previous embedded native tab."
   (interactive)
   (when (appine--window-live-p)
-    (appine-select-prev-tab)
+    (appine-native-select-prev-tab)
     (appine-refresh)))
 
 (defun appine-close ()
   "Close all embedded native views and delete host window when possible."
   (interactive)
-  (appine-close)
+  (appine-native-close)
   (when (appine--window-live-p)
     (let ((win appine--window))
       (setq appine--window nil)
@@ -439,7 +444,7 @@
         (setq appine--active nil)
         (appine--update-active-keymap)
         (ignore-errors
-          (appine-move-resize -9999 -9999 100 100))))))
+          (appine-native-move-resize -9999 -9999 100 100))))))
 
 ;; 监听窗口布局的变化 (例如 C-x 1, C-x 3, 拖拽边缘)
 (add-hook 'window-configuration-change-hook #'appine--update-visibility)
