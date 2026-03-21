@@ -153,8 +153,10 @@
       (match-string 1 content))))
 
 (defun appine--check-update ()
-  "检查 GitHub 上的新版本，并根据用户的忽略配置决定是否提示更新."
-  (let ((github-version (appine-fetch-github-version)))
+  "检查 GitHub 上的新版本，并根据用户的忽略配置决定是否提示更新。
+如果执行了更新并重新加载，则返回 t；否则返回 nil。"
+  (let ((github-version (appine-fetch-github-version))
+        (updated nil))
     ;; 1. 如果获取到了版本，且和当前版本不一致
     (when (and github-version (not (string= github-version appine-version)))
       (let* ((config-dir (expand-file-name "~/.config/appine/"))
@@ -183,7 +185,6 @@
               ;; 6. 用户选是：执行 git pull 并重新加载
               (progn
                 (message "[Appine] prepare update...")
-
                 (let ((default-directory appine-root-dir))
                   ;; 先执行 git stash 暂存本地可能存在的修改
                   (message "[Appine] stash local modify (git stash)...")
@@ -207,60 +208,55 @@
                         ;; 设置为 github 的版本
                         (setq appine-version github-version)
 
-                        ;; 3. 强行停止当前旧版本 appine.el 的继续加载
-                        (error "[Appine] Appine been updated and reloaded.  Aborting the current loading process of the old version!"))
+                        ;; 3. 标记更新成功，不再抛出 error
+                        (setq updated t)
+                        (message "[Appine] Appine has been successfully updated and reloaded."))
                     
-                    ;; ELSE 分支：只有 git pull 返回非 0（失败）时才会执行
+                    ;; ELSE 分支
                     (message "[Appine] Auto update failed! Please update manually."))))
 
-            ;; 5. 用户选否：写入忽略版本和当前日期到 JSON
+            ;; 5. 用户选否：写入忽略版本
             (unless (file-exists-p config-dir)
               (make-directory config-dir t))
             (let ((json-config (list (cons 'ignore_version github-version)
                                      (cons 'last_ask_date current-time))))
               (with-temp-file config-path
-                (insert (json-encode json-config))))))))))
+                (insert (json-encode json-config))))))))
+    updated)) ;; 返回是否更新成功的状态
 
 (defun appine-ensure-module ()
-  "确保动态模块存在。如果不存在，询问是否下载预编译版本，选择是则尝试下载，否则直接本地编译."
-  (appine--check-update)
-
-  ;; 使用 file-truename 解析软链接的真实路径
-  (let* ((module-file (expand-file-name "appine-module.dylib" appine-root-dir))
-         (download-url (format "https://github.com/%s/releases/download/v%s/appine-module.dylib"
-                               appine-github-repo appine-version)))
-    
-    ;; 1. 如果文件不存在，处理获取逻辑
-    (unless (file-exists-p module-file)
-      ;; 询问用户是否下载预编译版本
-      (if (y-or-n-p "[Appine] Would you like to download a precompiled module from GitHub?\n未找到本地模块，是否尝试从 GitHub 下载预编译版本?")
-          (progn
-            (message "[Appine] Preparing to download the precompiled module...")
-            (if (appine--download-module download-url module-file)
-                ;; 下载成功后，立刻尝试移除 macOS 的隔离属性
-                (appine--remove-quarantine module-file)
-              ;; 如果下载失败（超时或网络错误），回退到本地编译
-              (message "[Appine] Failed to download the precompiled module. Falling back to local compilation...")
-              (appine--compile-module)))
-        ;; 用户选择不下载（选 n），直接进入本地编译
-        (message "[Appine] Skipping download and starting local compilation...")
-        (appine--compile-module)))
-    
-    ;; 2. 加载模块
-    (if (file-exists-p module-file)
-        (condition-case err
+  "确保动态模块存在。如果不存在，询问是否下载预编译版本，选择是则尝试下载，否则直接本地编译。"
+  ;; 如果 appine--check-update 返回 t，说明加载了新文件，新文件会负责加载模块，旧文件直接跳过
+  (unless (appine--check-update)
+    (let* ((module-file (expand-file-name "appine-module.dylib" appine-root-dir))
+           (download-url (format "https://github.com/%s/releases/download/v%s/appine-module.dylib"
+                                 appine-github-repo appine-version)))
+      
+      ;; 1. 如果文件不存在，处理获取逻辑
+      (unless (file-exists-p module-file)
+        (if (y-or-n-p "[Appine] Would you like to download a precompiled module from GitHub?\n未找到本地模块，是否尝试从 GitHub 下载预编译版本?")
             (progn
-              (appine--remove-quarantine module-file)
-              (module-load module-file)
-              (message "[Appine] module loaded！"))
-          (error
-           (message "[Appine] module load failed: %s" (error-message-string err))
-           (message "[Appine] If this is caused by macOS security restrictions, please run the following command in Terminal: xattr -d com.apple.quarantine %s" module-file)
-           (signal (car err) (cdr err))))
-      (error "[Appine] Loading failed. Please read the README.md and try building from source!"))))
+              (message "[Appine] Preparing to download the precompiled module...")
+              (if (appine--download-module download-url module-file)
+                  (appine--remove-quarantine module-file)
+                (message "[Appine] Failed to download the precompiled module. Falling back to local compilation...")
+                (appine--compile-module)))
+          (message "[Appine] Skipping download and starting local compilation...")
+          (appine--compile-module)))
+      
+      ;; 2. 加载模块
+      (if (file-exists-p module-file)
+          (condition-case err
+              (progn
+                (appine--remove-quarantine module-file)
+                (module-load module-file)
+                (message "[Appine] module loaded！"))
+            (error
+             (message "[Appine] module load failed: %s" (error-message-string err))
+             (message "[Appine] If this is caused by macOS security restrictions, please run the following command in Terminal: xattr -d com.apple.quarantine %s" module-file)
+             (signal (car err) (cdr err))))
+        (error "[Appine] Loading failed. Please read the README.md and try building from source!")))))
 
-;; 在插件加载时自动执行保障逻辑
-(appine-ensure-module)
 
 ;;; ==========================================================================
 ;;; 核心实现
@@ -657,10 +653,6 @@ on the right and open the default usage.html help page."
                 (appine--sync-active-state)))))
 
 
-(when (featurep 'appine-module)
-  (ignore-errors
-    (appine-set-debug-log (if appine-debug-logging 1 0))))
-
 ;; 尝试过使用绑定虚拟按键 <f20> 来绑定函数，但是没有成功。改为使用 sigusr1
 ;; 为了防止其他插件也使用 sigusr1， 加了一个标志位来判断是否是 Appine 发送的信号。
 (defvar appine--old-sigusr1-handler (lookup-key special-event-map [sigusr1]))
@@ -733,6 +725,11 @@ on the right and open the default usage.html help page."
 ;; 在 org-mode 加载后自动挂载 hook
 (with-eval-after-load 'org
   (add-hook 'org-open-at-point-functions #'appine--org-open-at-point))
+
+(appine-ensure-module)
+(when (featurep 'appine-module)
+  (ignore-errors
+    (appine-set-debug-log (if appine-debug-logging 1 0))))
 
 
 (provide 'appine)
