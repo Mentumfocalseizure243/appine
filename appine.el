@@ -5,7 +5,7 @@
 ;; Author: Huang Chao <huangchao.cpp@gmail.com>
 ;; Copyright (C) 2026, Huang Chao, all rights reserved.
 ;; Created: 2026-03-15 19:35:21
-;; Version: 0.0.5
+;; Version: 0.0.6
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/chaoswork/appine
 ;; Keywords: tools, multimedia, convenience, macos
@@ -57,29 +57,31 @@
 (require 'url)
 
 (defconst appine-github-repo "chaoswork/appine")
-(defconst appine-version "0.0.5") ;; 记得打 tag 以使用 github action
+(defconst appine-version "0.0.6") ;; 记得打 tag 以使用 github action
 
-
-;; 加载模块
-
+;;; ==========================================================================
+;;; 加载模块
+;;; ==========================================================================
 (defvar appine-download-timeout 15
-  "下载预编译模块的超时时间（秒）。")
+  "下载预编译模块的超时时间（秒）.")
 
 (defvar appine-download-retries 3
-  "下载预编译模块的失败重试次数。")
+  "下载预编译模块的失败重试次数.")
 
-(defun my-source-file-name ()
-  "返回当前加载文件对应的 .el 源文件真实路径，方便编译"
-  (let* ((file (or load-file-name (buffer-file-name)))
+(defvar appine-root-dir
+  (file-name-directory
+    ;; 返回当前加载文件对应的 .el 源文件真实路径，方便编译
+    (let* ((file (or load-file-name (buffer-file-name)))
          (source-file
           (if (and file (string-suffix-p ".elc" file))
               (substring file 0 -1)   ; "foo.elc" -> "foo.el"
             file)))
     (and source-file
          (file-truename source-file))))
+  "Appine 插件所在的真实根目录路径.")
 
 (defun appine--remove-quarantine (file)
-  "尝试移除 macOS Gatekeeper 隔离属性，不然加载时可能会有弹窗拦截。"
+  "尝试移除 macOS Gatekeeper 隔离属性，不然加载时可能会有弹窗拦截."
   (when (and (eq system-type 'darwin)
              (executable-find "xattr")
              (file-exists-p file))
@@ -91,18 +93,17 @@
        (message "[Appine] 移除隔离属性失败: %s" (error-message-string err))))))
 
 (defun appine--compile-module ()
-  "本地执行 make 编译动态模块。"
+  "本地执行 make 编译动态模块."
   (message "[Appine] Starting local compilation of the module, This may take a few minutes...")
-  (let* ((dir (file-name-directory (my-source-file-name)))
-         (default-directory dir)
+  (let* ((default-directory appine-root-dir)
          (exit-code (call-process "make" nil "*appine-compile*" t)))
     (if (= exit-code 0)
         (message "[Appine] Starting to compile the module locally. This may take a few minutes...")
-      (error "[Appine] Local compilation failed. See the *appine-compile* buffer for error details."))))
+      (error "[Appine] Local compilation failed.  See the *appine-compile* buffer for error details!"))))
 
 (defun appine--download-module (url dest-path)
-  "带有超时和重试机制的下载函数。
-如果下载成功返回 t，否则返回 nil。"
+  "带有超时和重试机制的下载函数.
+如果下载成功返回 t，否则返回 nil."
   (let ((retries appine-download-retries)
         (success nil))
     (while (and (> retries 0) (not success))
@@ -134,18 +135,102 @@
            (sleep-for 2))))) ;; 失败后等待 2 秒再重试
     success))
 
+(defun appine-fetch-github-version ()
+  "从 GitHub 获取 appine.el 的最新版本号."
+  (let* ((url "https://raw.githubusercontent.com/chaoswork/appine/master/appine.el")
+         (content
+          (condition-case nil
+              ;; 添加 5 秒超时，防止网络问题导致 Emacs 启动卡死
+              (with-current-buffer (url-retrieve-synchronously url t t 5)
+                (unwind-protect
+                    (progn
+                      (goto-char (point-min))
+                      (when (re-search-forward "\r?\n\r?\n" nil t)
+                        (buffer-substring-no-properties (point) (point-max))))
+                  (kill-buffer (current-buffer))))
+            (error nil))))
+    (when (and content (string-match "^;;[[:space:]]*Version:[[:space:]]*\\([0-9][0-9.]*\\)" content))
+      (match-string 1 content))))
+
+(defun appine--check-update ()
+  "检查 GitHub 上的新版本，并根据用户的忽略配置决定是否提示更新."
+  (let ((github-version (appine-fetch-github-version)))
+    ;; 1. 如果获取到了版本，且和当前版本不一致
+    (when (and github-version (not (string= github-version appine-version)))
+      (let* ((config-dir (expand-file-name "~/.config/appine/"))
+             (config-path (expand-file-name "ignore_version.json" config-dir))
+             (trigger-update t)
+             (current-time (float-time)))
+        
+        ;; 2 & 3. 尝试读取配置文件
+        (when (file-exists-p config-path)
+          (let* ((json-object-type 'alist)
+                 (json-array-type 'list)
+                 (config (ignore-errors (json-read-file config-path)))
+                 (ignore-version (alist-get 'ignore_version config))
+                 (last-ask-date (alist-get 'last_ask_date config)))
+            ;; 如果配置里的版本和 GitHub 最新版本一致
+            (when (and (stringp ignore-version)
+                       (string= ignore-version github-version)
+                       (numberp last-ask-date))
+              ;; 判断最后询问日期是否不到一个月 (30天 = 2592000秒)
+              (when (< (- current-time last-ask-date) 2592000)
+                (setq trigger-update nil))))) ;; 放弃更新逻辑
+        
+        ;; 4. 触发更新逻辑
+        (when trigger-update
+          (if (y-or-n-p (format "[Appine] New version (%s) found on GitHub.  Update right now?\n[Appine] github上发现新版本 (%s)，是否更新插件?" github-version github-version))
+              ;; 6. 用户选是：执行 git pull 并重新加载
+              (progn
+                (message "[Appine] prepare update...")
+                (let ((default-directory appine-root-dir))
+                  ;; 先执行 git stash 暂存本地可能存在的修改
+                  (message "[Appine] stash local modify (git stash)...")
+                  (call-process "git" nil nil nil "stash")
+                  
+                  ;; 然后执行 git pull
+                  (message "[Appine] pull the newest code (git pull)...")
+                  (if (= 0 (call-process "git" nil nil nil "pull" "origin" "master"))
+                      (progn
+                        (message "[Appine] Update successfully. Cleaning up old appine-module.dylib...")
+                        
+                        ;; 1. 检查并删除 appine-module.dylib
+                        (let ((dylib-file (expand-file-name "appine-module.dylib" appine-root-dir)))
+                          (when (file-exists-p dylib-file)
+                            (delete-file dylib-file)
+                            (message "[Appine] old appine-module.dylib has been removed")))
+                        
+                        ;; 2. 重新加载新版本的 appine.el
+                        (message "[Appine] reload appine.el ...")
+                        (load-file (expand-file-name "appine.el" appine-root-dir))
+                        
+                        ;; 3. 强行停止当前旧版本 appine.el 的继续加载
+                        (error "[Appine] Appine been updated and reloaded.  Aborting the current loading process of the old version!"))
+                    
+                    ;; ELSE 分支：只有 git pull 返回非 0（失败）时才会执行
+                    (message "[Appine] Auto update failed! Please update manually."))))
+
+            ;; 5. 用户选否：写入忽略版本和当前日期到 JSON
+            (unless (file-exists-p config-dir)
+              (make-directory config-dir t))
+            (let ((json-config (list (cons 'ignore_version github-version)
+                                     (cons 'last_ask_date current-time))))
+              (with-temp-file config-path
+                (insert (json-encode json-config))))))))))
+
 (defun appine-ensure-module ()
-  "确保动态模块存在。如果不存在，询问是否下载预编译版本，选择是则尝试下载，否则直接本地编译。"
+  "确保动态模块存在。如果不存在，询问是否下载预编译版本，选择是则尝试下载，否则直接本地编译."
+  (appine--check-update)
+
   ;; 使用 file-truename 解析软链接的真实路径
-  (let* ((dir (file-name-directory (my-source-file-name)))
-         (module-file (expand-file-name "appine-module.dylib" dir))
+  (let* ((module-file (expand-file-name "appine-module.dylib" appine-root-dir))
          (download-url (format "https://github.com/%s/releases/download/v%s/appine-module.dylib"
                                appine-github-repo appine-version)))
     
     ;; 1. 如果文件不存在，处理获取逻辑
     (unless (file-exists-p module-file)
       ;; 询问用户是否下载预编译版本
-      (if (y-or-n-p "[Appine] Would you like to download a precompiled module from GitHub?\n未找到本地模块，是否尝试从 GitHub 下载预编译版本？")
+      (if (y-or-n-p "[Appine] Would you like to download a precompiled module from GitHub?\n未找到本地模块，是否尝试从 GitHub 下载预编译版本?")
           (progn
             (message "[Appine] Preparing to download the precompiled module...")
             (if (appine--download-module download-url module-file)
@@ -167,21 +252,31 @@
               (message "[Appine] module loaded！"))
           (error
            (message "[Appine] module load failed: %s" (error-message-string err))
-           (message "[Appine] 如果是 macOS 安全限制，请在终端执行: xattr -d com.apple.quarantine %s" module-file)
+           (message "[Appine] If this is caused by macOS security restrictions, please run the following command in Terminal: xattr -d com.apple.quarantine %s" module-file)
            (signal (car err) (cdr err))))
-      (error "[Appine] Loading failed. Please read the README.md and try building from source."))))
+      (error "[Appine] Loading failed. Please read the README.md and try building from source!"))))
 
 ;; 在插件加载时自动执行保障逻辑
 (appine-ensure-module)
 
+;;; ==========================================================================
+;;; 核心实现
+;;; ==========================================================================
 (defgroup appine nil
-  "Appine = App in Emacs. Embed native macOS apps inside Emacs."
+  "Appine = App in Emacs.  Embed native macOS apps inside Emacs."
   :group 'external)
 
 (defcustom appine-debug-logging nil
   "Enable debug logging for appine native module."
   :type 'boolean
   :group 'appine)
+
+(defcustom appine-dedicated-window nil
+  "Whether Appine window should be dedicated while Appine is active.
+default is nil, If non-nil, window becomes dedicated only when Appine is active."
+  :type 'boolean
+  :group 'appine)
+
 
 (defun appine-toggle-debug-logging ()
   "Toggle native debug logging for appine."
@@ -193,7 +288,8 @@
   (message "appine debug logging is now %s" (if appine-debug-logging "ON" "OFF")))
 
 (defcustom appine-window-size 1.0
-  "设置为 1.0 目前是平分两个窗口，< 1.0 则 Appine-window 会变小。"
+  "Set it to 1.0 to make the two windows split evenly.
+If it is less than 1.0, the Appine window will become smaller."
   :type 'number)
 
 (defvar appine--window nil)
@@ -204,14 +300,40 @@
 (defvar appine-active-map
   (let ((map (make-sparse-keymap)))
     ;; mac app style shortcuts when active
-    (define-key map [?\s-c] #'appine-copy)
-    (define-key map [?\s-v] #'appine-paste)
-    (define-key map [?\s-x] #'appine-cut)
-    (define-key map [?\s-z] #'appine-undo)
-    (define-key map [?\s-f] #'appine-find)
+    ;; 如果已经把 Cmd-c 等绑定到 kill-ring-save, 那按 Cmd-c 的时候，可能会先被 Emacs
+    ;; 捕获，导致无法在 Appine-window 执行 copy。
+    ;; 所以这里在激活 Appine Window 的时候，绑定到 dynamic module 的函数进行兜底。
+    ;; 但是这些函数只在 Appine Window 激活的时候生效，当 M-x appine-copy 的时候，
+    ;; Appine Window 自动进入了不激活状态，所以实际上也无法被手动调用，所以用
+    ;; lambda () (interactive) 来隐藏 M-x 编辑函数 的调用。
+    ;; 后续可能改成在 appine_core.m 中来处理 Cmd key 的捕获。
+    (define-key map [?\s-c] (lambda () (interactive) (appine--copy)))
+    (define-key map [?\s-v] (lambda () (interactive) (appine--paste)))
+    (define-key map [?\s-x] (lambda () (interactive) (appine--cut)))
+    (define-key map [?\s-z] (lambda () (interactive) (appine--undo)))
+    (define-key map [?\s-f] (lambda () (interactive) (appine--find)))
+    ;; (define-key map [?\s-u] #'appine-unfocus) ;; debug
     (define-key map [?\s-w] #'appine-close-tab)
     (define-key map [?\s-t] #'appine-new-tab)
-    (define-key map [?\s-o] #'appine-core-open-file)
+    (define-key map [?\s-r] #'appine-web-reload)
+    (define-key map [?\s-o] #'appine-open-file-by-file-chooser)
+    (define-key map (kbd "C-x C-f") #'appine-open-file-by-file-chooser)
+    (define-key map (kbd "C-c f") #'appine-next-tab)
+    (define-key map (kbd "C-c b") #'appine-prev-tab)
+    (define-key map (kbd "C-c C-f") #'appine-web-go-forward)
+    (define-key map (kbd "C-c C-b") #'appine-web-go-back)
+    
+    ;; Appine-Window 也支持 Emacs 的常用编辑快捷键
+    ;; Meta 键会被被中间某些环节捕获，传递不到 appine_core.m 的 monitor
+    ;; 所以通过 perform action 的方式实现。
+    (define-key map (kbd "M-w") (lambda () (interactive) (appine--copy)))
+    (define-key map (kbd "M-v") (lambda () (interactive) (appine--scroll-page-up)))
+    (define-key map (kbd "M-<") (lambda () (interactive) (appine--scroll-to-top)))
+    (define-key map (kbd "M->") (lambda () (interactive) (appine--scroll-to-bottom)))
+    ;; The shortcuts below are already bound in =appine_core.m=.
+    ;; (define-key map (kbd "C-y") #'appine-paste)
+    ;; (define-key map (kbd "C-w") #'appine-cut)
+    ;; (define-key map (kbd "C-/") #'appine-undo)
     map)
   "High priority keymap used while appine is active.")
 
@@ -232,9 +354,6 @@
              (appine--window-live-p)
              (eq (selected-window) appine--window))))
 
-(defun appine--buffer ()
-  (get-buffer-create appine--buffer-name))
-
 (defun appine--ensure-window ()
   (unless (appine--window-live-p)
     (let* ((base (selected-window))
@@ -243,8 +362,11 @@
       (set-window-buffer new (appine--buffer))
       
       ;;将这个窗口标记为专用，并禁止 Emacs 自动把其他 buffer 塞进来
-      (set-window-dedicated-p new t)
-      (set-window-parameter new 'no-other-window t)
+      ;; (set-window-dedicated-p new t)
+      ;; 不要永久 dedicated；由 appine--set-active 动态控制
+      (set-window-dedicated-p new nil)      
+      ;; 之前测试用，记得把下面的一行删掉，不然 C-x o 无法正常工作
+      ;; (set-window-parameter new 'no-other-window t)
       
       (with-current-buffer (appine--buffer)
         (setq-local mode-line-format nil)
@@ -253,19 +375,10 @@
         (setq buffer-read-only t)
         (let ((inhibit-read-only t))
           (erase-buffer)
-          (insert "appine host\n")
-          (insert "Toolbar is shown above tab bar.\n")
-          (insert "Inactive mode: Emacs keybindings\n")
-          (insert "Active mode: native mac view interaction\n\n")
-          (insert "Commands:\n")
-          (insert "  M-x appine-open-web-split\n")
-          (insert "  M-x appine-open-pdf-split\n")
-          (insert "  M-x appine-focus\n")
-          (insert "  M-x appine-unfocus\n")
-          (insert "  M-x appine-next-tab\n")
-          (insert "  M-x appine-prev-tab\n")
-          (insert "  M-x appine-close-tab\n")
-          (insert "  M-x appine-close\n")))
+          (insert "\nThis is the *Appine Window* buffer.\n")
+          (insert "\nIf you can see this message, Emacs is currently displaying at least two *Appine Window* buffers.\n")
+          (insert "\nThe embedded macOS view of Appine can only be attached to the active *Appine Window* buffer.\n")
+          (insert "\nYou can press `C-x 1` to close this buffer.\n")))
 
       (let* ((total (window-total-width base))
              (target (max 20 (floor (* total appine-window-size)))))
@@ -294,6 +407,11 @@
 (defun appine--set-active (flag)
   (unless (eq appine--active flag)
     (setq appine--active flag)
+    ;; 失活时一定解除 dedicated，避免影响 C-x ? 等改变窗口的操作
+    (when (appine--window-live-p)
+      (set-window-dedicated-p
+       appine--window
+       (and flag appine-dedicated-window)))    
     (appine--update-active-keymap)
     (when (featurep 'appine-module)
       (ignore-errors
@@ -305,7 +423,7 @@
   (unless (appine--window-live-p)
     (setq appine--active nil)
     (appine--update-active-keymap))
-  (message "appine--active: %s, appine--active-map-enabled: %s" appine--active appine--active-map-enabled)
+    ;; (message "appine--active: %s, appine--active-map-enabled: %s" appine--active appine--active-map-enabled)
   )
 
 (defun appine-refresh ()
@@ -336,47 +454,97 @@
     (appine-native-focus)
     (appine-native-perform-action name)))
 
-(defun appine-copy ()
+;; scroll page down, scroll to top or bottom implement in appine_core.m
+(defun appine--scroll-page-up ()
+  "Native scroll page up for active appine."
+  (appine-native-action "scrollPageUp"))
+
+(defun appine--scroll-to-top ()
+  "Native scroll to top for active appine."
+  (appine-native-action "scrollToTop"))
+
+(defun appine--scroll-to-bottom ()
+  "Native scroll to bottom for active appine."
+  (appine-native-action "scrollToBottom"))
+
+(defun appine--copy ()
   "Native copy for active appine."
-  (interactive)
   (appine-native-action "copy"))
 
-(defun appine-paste ()
+(defun appine--paste ()
   "Native paste for active appine."
-  (interactive)
   (appine-native-action "paste"))
 
-(defun appine-cut ()
+(defun appine--cut ()
   "Native cut for active appine."
-  (interactive)
   (appine-native-action "cut"))
 
-(defun appine-undo ()
+(defun appine--undo ()
   "Native undo for active appine."
-  (interactive)
   (appine-native-action "undo"))
 
-(defun appine-find ()
+(defun appine--find ()
   "Native find for active appine."
-  (interactive)
   (appine-native-action "find"))
 
 (defun appine-new-tab ()
   "Open a new default web tab in appine."
   (interactive)
   (when (appine--window-live-p)
-    (appine-action "new-tab")
+    (appine-native-action "newTab")
     (appine--set-active t)))
 
-(defun appine-core-open-file ()
-  "Open a file chooser in appine."
+(defun appine-open-file-by-file-chooser ()
+  "This function can only be used when the Appine window is active!
+Open a file chooser in appine."
   (interactive)
   (when (appine--window-live-p)
-    (appine-native-action "open-file")
+    (appine-native-action "openFile")
     (appine--set-active t)))
+;; (put 'appine-core-open-file 'completion-predicate #'ignore)
+
+(defun appine-web-go-forward ()
+  "Go forward in Appine Web Backend."
+  (interactive)
+  (appine-native-web-go-forward))
+
+(defun appine-web-go-back ()
+  "Go back in Appine Web Backend."
+  (interactive)
+  (appine-native-web-go-back))
+
+(defun appine-web-reload ()
+  "Go back in Appine Web Backend."
+  (interactive)
+  (appine-native-web-reload))
 
 ;;;###autoload
-(defun appine-open-web-split (url)
+(defun appine ()
+  "Open the Appine window.
+If the `*Appine Window*` buffer already exists,display it in
+a right-hand split window; otherwise, split the window
+on the right and open the default usage.html help page."
+  (interactive)
+  (let* ((buf-exists (get-buffer appine--buffer-name))
+         ;; 获取当前插件所在的目录
+         (usage-file (expand-file-name "docs/usage.html" appine-root-dir)))
+    ;; (message "usage-file: %s" usage-file)
+
+    (if buf-exists
+        ;; 如果 buffer 已经存在，确保窗口在右侧打开，并激活焦点
+        (progn
+          (appine--ensure-window)
+          (select-window appine--window)
+          (appine--set-active t))
+
+      ;; 如果 buffer 不存在，先检查 usage.html 是否存在，不存在则自动生成
+      ;; (unless (file-exists-p usage-file)
+      ;;   (appine--create-usage-html usage-file))
+      ;; 在右侧打开 usage.html
+      (appine-open-file usage-file))))
+
+;;;###autoload
+(defun appine-open-url (url)
   "Split window on the right and open URL in a new embedded native web tab."
   (interactive "sURL: ")
   ;; 检查并自动补全 https:// 前缀 (忽略大小写)
@@ -390,9 +558,8 @@
     (select-window appine--window)
     (appine--set-active t)))
 
-;; TODO: combine appine-open-file-split, appine-open-pdf-split to one func
 ;;;###autoload
-(defun appine-open-file-split (path)
+(defun appine-open-file (path)
   "Split window on the right and open PATH in a new embedded native Quicklook tab."
   (interactive "fFile: ")
   (pcase-let* ((`(,x ,y ,w ,h) (appine--rect)))
@@ -425,15 +592,7 @@
 (defun appine-close ()
   "Close all embedded native views and delete host window when possible."
   (interactive)
-  (appine-native-close)
-  (when (appine--window-live-p)
-    (let ((win appine--window))
-      (setq appine--window nil)
-      (setq appine--active nil)
-      (appine--update-active-keymap)
-      (when (window-live-p win)
-        (ignore-errors
-          (delete-window win))))))
+  (delete-window appine--window))
 
 (add-hook 'window-size-change-functions
           (lambda (_frame)
@@ -442,10 +601,19 @@
               (ignore-errors
                 (appine-refresh)))))
 
+(defun appine--get-active-window-for-buffer (buf-name)
+  "获取用于渲染 Appine 原生视图的 Emacs 窗口。
+优先返回当前选中的窗口（如果它显示的是该 buf），否则返回任意一个显示该 buf 的可见窗口。"
+  (let ((sel-win (selected-window)))
+    (if (equal (buffer-name (window-buffer sel-win)) buf-name)
+        sel-win
+      (get-buffer-window buf-name 'visible))))
+
 (defun appine--update-visibility (&rest _args)
   "Check if *appine* buffer is visible and update native view accordingly."
   (when (featurep 'appine-module)
-    (let ((win (get-buffer-window appine--buffer-name)))
+    ;; 不再使用简单的 get-buffer-window，而是使用智能获取函数
+    (let ((win (appine--get-active-window-for-buffer appine--buffer-name)))
       (if win
           (progn
             ;; 如果可见，绑定新窗口并拽回原生视图
@@ -454,6 +622,9 @@
             (ignore-errors (appine--sync-active-state)))
         ;; Trick: 如果不可见，解绑窗口并把原生视图移到屏幕外
         ;; 注意：这里保留 100x100 的大小而不是 0x0，防止 macOS 彻底挂起 WebView 的渲染进程
+        ;; 避免旧 window 残留 dedicated
+        (when (window-live-p appine--window)
+          (set-window-dedicated-p appine--window nil))        
         (setq appine--window nil)
         (setq appine--active nil)
         (appine--update-active-keymap)
@@ -466,6 +637,9 @@
 ;; 监听窗口内 Buffer 的变化 (例如 C-x b 切换到了 *appine*)
 (add-hook 'window-buffer-change-functions #'appine--update-visibility)
 
+;; 监听窗口焦点的变化 (例如 C-x o 切换窗口，让视图能瞬间“瞬移”过去)
+(add-hook 'window-selection-change-functions #'appine--update-visibility)
+
 ;; 监听 Buffer 列表的变化 (处理一些边缘的焦点同步情况)
 (add-hook 'buffer-list-update-hook
           (lambda ()
@@ -473,7 +647,6 @@
                        (appine--window-live-p))
               (ignore-errors
                 (appine--sync-active-state)))))
-
 
 
 (when (featurep 'appine-module)
@@ -506,25 +679,25 @@
 ;; 绑定到 SIGUSR1
 (define-key special-event-map [sigusr1] #'appine-deactivate-action)
 
-;;; --------------------------------------------------------
+;;; ==========================================================================
 ;;; Org-mode 集成
-;;; --------------------------------------------------------
-(defcustom appine-enable-open-in-org-mode nil
+;;; ==========================================================================
+(defcustom appine-use-for-org-links nil
   "当设置为 t 时，在 org-mode 中尝试使用 Appine 打开 URL 和非 org 文件链接。"
   :type 'boolean
   :group 'appine)
 
-(defun appine-toggle-open-in-org-mode ()
+(defun appine-toggle-use-for-org-links ()
   "切换是否在 org-mode 中使用 Appine 打开链接。"
   (interactive)
-  (setq appine-enable-open-in-org-mode (not appine-enable-open-in-org-mode))
+  (setq appine-use-for-org-links (not appine-use-for-org-links))
   (message "[Appine] Org-mode: Open files/URLs with Appine: %s"
-           (if appine-enable-open-in-org-mode "开启 (ON)" "关闭 (OFF)")))
+           (if appine-use-for-org-links "开启 (ON)" "关闭 (OFF)")))
 
 (defun appine--org-open-at-point ()
   "拦截 `org-open-at-point'，根据配置使用 Appine 打开链接。
 作为 hook 函数添加到 `org-open-at-point-functions' 中。"
-  (when appine-enable-open-in-org-mode
+  (when appine-use-for-org-links
     (let* ((context (ignore-errors (org-element-context)))
            (type (org-element-type context)))
       (when (eq type 'link)
@@ -534,7 +707,7 @@
            ;; 1. 处理 URL (http / https)
            ((member link-type '("http" "https"))
             (let ((url (concat link-type ":" path)))
-              (appine-open-web-split url))
+              (appine-open-url url))
             t) ;; 返回 t 表示已拦截处理
            
            ;; 2. 处理文件链接
@@ -543,7 +716,7 @@
             (if (string-suffix-p ".org" path t)
                 nil
               ;; 否则使用 appine 打开文件
-              (appine-open-file-split path)
+              (appine-open-file path)
               t)) ;; 返回 t 表示已拦截处理
            
            ;; 3. 其他类型（如内部标题链接、id 链接等），返回 nil 交给 org-mode 默认处理

@@ -30,6 +30,10 @@
 
 @implementation AppinePdfBackend
 
+- (AppineBackendKind)kind {
+    return AppineBackendKindPDF;
+}
+
 - (instancetype)initWithPath:(NSString *)path {
     self = [super init];
     if (self) {

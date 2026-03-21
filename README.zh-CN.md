@@ -39,14 +39,14 @@ https://github.com/user-attachments/assets/986af882-56e5-4ce4-b66d-1acde987c9ed
 
 
 ### 打开网页 (Open a Web Page)
-运行 `M-x appine-open-web-split`。系统会提示你输入一个 URL。一个原生的 WebKit 视图将在当前的 Emacs 窗口中打开。一段演示视频如下：
+运行 `M-x appine-open-url`。系统会提示你输入一个 URL。一个原生的 WebKit 视图将在当前的 Emacs 窗口中打开。一段演示视频如下：
 
 一段 Open Web Page 的视频地址
 
 https://github.com/user-attachments/assets/f63eff4e-754e-4d4f-b11c-aa9d3f982c67
 
 ### 打开 PDF 或者其他文档
-运行 `M-x appine-open-file-split`。选择一个 PDF 文件，它将使用 macOS PDFKit 进行渲染。选择其他文件则会使用 quicklook 进行预览。
+运行 `M-x appine-open-file`。选择一个 PDF 文件，它将使用 macOS PDFKit 进行渲染。选择其他文件则会使用 quicklook 进行预览。
 
 一段打开 PDF 的视频地址
 
@@ -54,7 +54,7 @@ https://github.com/user-attachments/assets/f2dd6c5a-eabb-421b-8d2c-986540f230f6
 
 ### Org-mode 集成
 
-当 `(setq appine-enable-open-in-org-mode t)` 的时候，会使用 Appine 打开 url 和文件。运行 `M-x appine-toggle-open-in-org-mode` 来开启或者关闭该功能。
+当 `(setq appine-use-for-org-links t)` 的时候，会使用 Appine 打开 url 和文件。运行 `M-x appine-toggle-open-in-org-mode` 来开启或者关闭该功能。
 
 TODO：一段演示 org-mode 集成的视频
 
@@ -85,13 +85,14 @@ https://github.com/user-attachments/assets/fd33d767-37dd-4027-adae-823b32228c7e
 ```elisp
 (use-package appine
   :straight (appine :type git :host github :repo "chaoswork/appine")
+  :defer t  
   :custom
-  ;; 可选：使用 Appine 打开 org-mode 的文件或者链接，默认为关闭
-  (appine-enable-open-in-org-mode t) 
-  :config
-  ;; 可选：设置默认快捷键  
-  (global-set-key (kbd "C-x a w") 'appine-open-web-split)
-  (global-set-key (kbd "C-x a o") 'appine-open-file-split))
+  ;; 在 org-mode 中使用 Appine 打开链接
+  (appine-use-for-org-links t)
+  ;; 绑定你喜欢的前缀
+  :bind (("C-x a a" . appine)
+         ("C-x a u" . appine-open-url)
+         ("C-x a o" . appine-open-file)))         
 ```
 
 ### 方法 2：源码编译
@@ -111,6 +112,11 @@ https://github.com/user-attachments/assets/fd33d767-37dd-4027-adae-823b32228c7e
    ```elisp
    (add-to-list 'load-path "~/.emacs.d/lisp/appine")
    (require 'appine)
+   (setq appine-use-for-org-links t)
+   (global-set-key (kbd "C-x a a") 'appine)
+   (global-set-key (kbd "C-x a u") 'appine-open-url)
+   (global-set-key (kbd "C-x a o") 'appine-open-file))
+
    ```
 
 ## 🛠️ 持续完善

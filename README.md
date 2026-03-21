@@ -38,14 +38,14 @@ deactivate:
 https://github.com/user-attachments/assets/986af882-56e5-4ce4-b66d-1acde987c9ed
 
 ### Open a Web Page
-Run `M-x appine-open-web-split`. You will be prompted to enter a URL. A native WebKit view will open in the current Emacs window. A demonstration video is as follows:
+Run `M-x appine-open-url`. You will be prompted to enter a URL. A native WebKit view will open in the current Emacs window. A demonstration video is as follows:
 
 A video demonstrating Open Web Page.
 
 https://github.com/user-attachments/assets/f63eff4e-754e-4d4f-b11c-aa9d3f982c67
 
 ### Opening PDFs and Other Documents
-Run `M-x appine-open-file-split`. If you select a PDF file, it will be rendered using macOS PDFKit. Other files will be previewed using Quick Look.
+Run `M-x appine-open-file`. If you select a PDF file, it will be rendered using macOS PDFKit. Other files will be previewed using Quick Look.
 
 A video demonstrating Open PDF.
 
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/f2dd6c5a-eabb-421b-8d2c-986540f230f6
 
 ### Org-mode Integration
 
-Setting `(setq appine-enable-open-in-org-mode t)` enables opening URLs and files with Appine. You can toggle this feature on or off by running `M-x appine-toggle-open-in-org-mode`.
+Setting `(setq appine-use-for-org-links t)` enables opening URLs and files with Appine. You can toggle this feature on or off by running `M-x appine-toggle-open-in-org-mode`.
 
 TODO: Add a video demonstrating Org-mode integration.
 
@@ -84,13 +84,14 @@ The easiest way to install Appine is using `use-package` with `straight.el` or `
 ```elisp
 (use-package appine
   :straight (appine :type git :host github :repo "chaoswork/appine")
+  :defer t  
   :custom
   ;; enables opening URLs and files with Appine, default is nil
-  (appine-enable-open-in-org-mode t) 
-  :config
-  ;; Optional: Set default keybindings
-  (global-set-key (kbd "C-x a w") 'appine-open-web-split)
-  (global-set-key (kbd "C-x a o") 'appine-open-file-split))  
+  (appine-use-for-org-links t)
+  ;; bind any prefix you like
+  :bind (("C-x a a" . appine)
+         ("C-x a u" . appine-open-url)
+         ("C-x a o" . appine-open-file)))
 ```
 
 ### Method 2: Build from Source
@@ -110,6 +111,10 @@ If you prefer to build the module yourself, you need the Xcode Command Line Tool
    ```elisp
    (add-to-list 'load-path "~/.emacs.d/lisp/appine")
    (require 'appine)
+   (setq appine-use-for-org-links t)
+   (global-set-key (kbd "C-x a a") 'appine)
+   (global-set-key (kbd "C-x a u") 'appine-open-url)
+   (global-set-key (kbd "C-x a o") 'appine-open-file))
    ```
 
 ## 🛠️ Continuous Improvement

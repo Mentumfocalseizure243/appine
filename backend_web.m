@@ -38,6 +38,10 @@ extern void appine_core_add_web_tab(NSString *urlString);
 
 @implementation AppineWebBackend
 
+- (AppineBackendKind)kind {
+    return AppineBackendKindWeb;
+}
+
 - (instancetype)initWithURL:(NSString *)urlString {
     self = [super init];
     if (self) {

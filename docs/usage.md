@@ -1,0 +1,39 @@
+# Welcome to Appine
+
+**Appine** (App in Emacs) allows you to embed native macOS views directly inside Emacs windows.
+
+When Appine starts, it opens an embedded Appine Window tied to an \*Appine Window\* buffer. You can maximize it with `C-x 1`, close it with `C-x 0`, and switch between buffers with `C-x o`. You can also scroll through the embedded Appine Window using `C-n`, `C-p`, `C-v`, `M-v`, `M-<`, and `M->`, just as you would in an Emacs buffer.
+
+## Commands (M-x)
+
+- `appine`: Open Appine Window and show the usage.
+- `appine-open-url`: Open a URL in a new web tab.
+- `appine-open-file`: Open a local file (PDF, Word, etc.) in a new tab.
+- `appine-next-tab` / `appine-prev-tab`: Switch between tabs.
+- `appine-close-tab`: Close the current tab.
+- `appine-close`: Close Appine. This only closes the embedded view; the \*Appine Buffer\* remains in the background. You can reopen the \*Appine Buffer\* at any time to restore the view.
+
+## Shortcuts (When Focused)
+
+Although there is a toolbar at the top, most common operations support both macOS and Emacs keybindings as much as possible. Currently supported shortcuts include:
+
+- Open File: `C-x C-f` or `Cmd + o`
+- New Tab: `Cmd + t`
+- Next Tab: `C-c f`
+- Close Tab: `Cmd + w`
+- Previous Tab: `C-c b`
+- Forward Web Page: `C-c C-f`
+- Backward Web Page: `C-c C-b`
+- Reload Web Page: `Cmd + r`
+- Copy: `M-w` or `Cmd + c`
+- Cut: `C-w` or `Cmd + x`
+- Paste: `C-y` or `Cmd + v`
+- Undo: `C-/` or `Cmd + z`
+
+## Something More
+
+When the focus is on \*Appine Window\*, the \*Appine Window\* is active, and you can use it just like a native macOS app.
+
+When the focus is not on \*Appine Window\*, the \*Appine Window\* becomes inactive. In this state, it will be dimmed and locked.
+
+Enjoy the full power of native macOS rendering without leaving Emacs!
