@@ -31,13 +31,7 @@
 // ===========================================================================
 // Log module, for debug
 // ===========================================================================
-static BOOL g_appine_debug_log = NO;
-
-#define APPINE_LOG(fmt, ...) do { \
-    if (g_appine_debug_log) { \
-        NSLog((@"[appine] " fmt), ##__VA_ARGS__); \
-    } \
-} while(0)
+BOOL g_appine_debug_log = NO;
 
 void appine_core_set_debug_log(int enable) {
     g_appine_debug_log = (enable != 0);
@@ -211,6 +205,26 @@ static NSView *appine_find_scroll_target(NSView *view) {
 
     return nil;
 }
+// 递归查找真正需要接收键盘焦点的视图 (WKWebView 或 PDFView)
+static NSView *appine_find_focus_target(NSView *view) {
+    if (!view) return nil;
+
+    // 1. 如果本身就是 WKWebView 或 PDFView，直接返回
+    if ([view isKindOfClass:NSClassFromString(@"WKWebView")] ||
+        [view isKindOfClass:NSClassFromString(@"PDFView")]) {
+        return view;
+    }
+    // 2. 递归查找子视图
+    for (NSView *subview in view.subviews) {
+        NSView *found = appine_find_focus_target(subview);
+        if ([found isKindOfClass:NSClassFromString(@"WKWebView")] ||
+            [found isKindOfClass:NSClassFromString(@"PDFView")]) {
+            return found;
+        }
+    }
+    // 3. 兜底返回原视图
+    return view;
+}
 
 static AppineTabItem *appine_find_tab(NSInteger tabId) {
     for (AppineTabItem *item in appine_state().tabs) {
@@ -225,8 +239,11 @@ static void appine_restore_focus_if_active(void) {
     if (state.isActive && state.hostWindow) {
         AppineTabItem *active = appine_find_tab(state.activeTabId);
         if (active && active.backend && active.backend.view) {
-            APPINE_LOG(@"Restoring focus to backend view: %@", [active.backend.view className]);
-            [state.hostWindow makeFirstResponder:active.backend.view];
+            // 查找真正的焦点目标，而不是把焦点给 NSView 容器
+            NSView *focusTarget = appine_find_focus_target(active.backend.view);
+            APPINE_LOG(@"Restoring focus. Backend view: %@, Focus target: %@", 
+                       [active.backend.view className], [focusTarget className]);
+            [state.hostWindow makeFirstResponder:focusTarget];
         }
     }
 }
@@ -396,7 +413,22 @@ static void appine_add_tab(id<AppineBackend> backend);
 - (void)cut:(id)sender { (void)sender; [self focusAndSendAction:@selector(cut:)]; }
 - (void)copy:(id)sender { (void)sender; [self focusAndSendAction:@selector(copy:)]; }
 - (void)paste:(id)sender { (void)sender; [self focusAndSendAction:@selector(paste:)]; }
-- (void)find:(id)sender { (void)sender; [self focusAndSendAction:@selector(performFindPanelAction:)]; }
+- (void)find:(id)sender {
+    (void)sender;
+    appine_set_active(YES);
+    
+    // 直接调用当前活跃 backend 的 toggleFindBar
+    AppineState *state = appine_state();
+    AppineTabItem *active = appine_find_tab(state.activeTabId);
+    
+    if (active && active.backend &&
+        [active.backend respondsToSelector:@selector(toggleFindBar)]) {
+        [active.backend toggleFindBar];
+        APPINE_LOG(@"[appine] toggleFindBar called on backend");
+    } else {
+        APPINE_LOG(@"[appine] active backend does not support find bar");
+    }
+}
 
 // PDF 的方向和正常是相反的, interesting...
 - (BOOL)scrollPageDown:(id)sender {
@@ -455,6 +487,43 @@ static void appine_add_tab(id<AppineBackend> backend);
     state.activeTabId = state.tabs[(idx - 1 + state.tabs.count) % state.tabs.count].tabId;
     appine_attach_active_view();
 }
+
+- (void)findNext:(id)sender {
+    (void)sender;
+    appine_set_active(YES);
+    
+    AppineState *state = appine_state();
+    AppineTabItem *active = appine_find_tab(state.activeTabId);
+    
+    // 注意这里是 findNext: 带冒号
+    if (active && active.backend &&
+        [active.backend respondsToSelector:@selector(findNext:)]) {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [active.backend performSelector:@selector(findNext:) withObject:nil];
+        #pragma clang diagnostic pop
+        APPINE_LOG(@"[appine] findNext: called on backend");
+    }
+}
+
+- (void)findPrevious:(id)sender {
+    (void)sender;
+    appine_set_active(YES);
+    
+    AppineState *state = appine_state();
+    AppineTabItem *active = appine_find_tab(state.activeTabId);
+    
+    // 注意这里是 findPrevious: 带冒号
+    if (active && active.backend &&
+        [active.backend respondsToSelector:@selector(findPrevious:)]) {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [active.backend performSelector:@selector(findPrevious:) withObject:nil];
+        #pragma clang diagnostic pop
+        APPINE_LOG(@"[appine] findPrevious: called on backend");
+    }
+}
+
 
 @end
 
@@ -564,6 +633,13 @@ static void appine_setup_global_event_monitor(void) {
                         if (isOpt && isShift && ([chars isEqualToString:@"."] || [chars isEqualToString:@">"])) {
                             return [g_action_target scrollToBottom:nil] ? nil:event;
                         }
+                        // 如果按键没有被上面的逻辑拦截（比如普通的字母 f，或者在网页输入框打字），
+                        // 且当前焦点在 Appine 内部，我们必须手动把事件发给 WKWebView，
+                        // 然后返回 nil，防止 Emacs 拦截它！
+                        if (state.hostWindow.firstResponder) {
+                            [state.hostWindow.firstResponder keyDown:event];
+                            APPINE_LOG(@"key send to current firstResponder: %@", [state.hostWindow.firstResponder className]);                                        return nil;
+                        }
                     }
                 }
                 return event;
@@ -576,10 +652,8 @@ static void appine_setup_global_event_monitor(void) {
                 hitView = [event.window.contentView hitTest:event.locationInWindow];
             }
 
-            if (g_appine_debug_log) {
-                NSLog(@"[appine] GLOBAL CLICK at %@, hitTest view: %@, window: %@",
-                      NSStringFromPoint(event.locationInWindow), [hitView className], [event.window className]);
-            }
+            APPINE_LOG(@"[appine] GLOBAL CLICK at %@, hitTest view: %@, window: %@",
+                NSStringFromPoint(event.locationInWindow), [hitView className], [event.window className]);
 
             if ([hitView isKindOfClass:[NSSegmentedControl class]]) {
                 NSSegmentedControl *tabControl = (NSSegmentedControl *)hitView;
@@ -808,8 +882,9 @@ static void appine_set_active(BOOL active) {
         if (!isAppineFocused) {
             AppineTabItem *tab = appine_find_tab(state.activeTabId);
             if (tab && tab.backend.view) {
-                APPINE_LOG(@"Forcing FirstResponder to backend view: %@", [tab.backend.view className]);
-                [state.hostWindow makeFirstResponder:tab.backend.view];
+                NSView *focusTarget = appine_find_focus_target(tab.backend.view);
+                APPINE_LOG(@"Forcing FirstResponder to target view: %@", [focusTarget className]);
+                [state.hostWindow makeFirstResponder:focusTarget];
             }
         }
     } else {

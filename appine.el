@@ -5,7 +5,7 @@
 ;; Author: Huang Chao <huangchao.cpp@gmail.com>
 ;; Copyright (C) 2026, Huang Chao, all rights reserved.
 ;; Created: 2026-03-15 19:35:21
-;; Version: 0.0.6
+;; Version: 0.0.7
 ;; Package-Requires: ((emacs "29.1"))
 ;; URL: https://github.com/chaoswork/appine
 ;; Keywords: tools, multimedia, convenience, macos
@@ -57,7 +57,7 @@
 (require 'url)
 
 (defconst appine-github-repo "chaoswork/appine")
-(defconst appine-version "0.0.6") ;; 记得打 tag 以使用 github action
+(defconst appine-version "0.0.7") ;; 记得打 tag 以使用 github action
 
 ;;; ==========================================================================
 ;;; 加载模块
@@ -181,7 +181,8 @@
         
         ;; 4. 触发更新逻辑
         (when trigger-update
-          (if (y-or-n-p (format "[Appine] New version (%s) found on GitHub.  Update right now?\n[Appine] github上发现新版本 (%s)，是否更新插件?" github-version github-version))
+          (if (y-or-n-p (concat (format "[Appine] New version (%s) found on GitHub. Update right now? " github-version)
+                                (format "[Appine] github上发现新版本 (%s)，是否更新插件?" github-version)))
               ;; 6. 用户选是：执行 git pull 并重新加载
               (progn
                 (message "[Appine] prepare update...")
@@ -320,6 +321,11 @@ If it is less than 1.0, the Appine window will become smaller."
     (define-key map (kbd "C-c b") #'appine-prev-tab)
     (define-key map (kbd "C-c C-f") #'appine-web-go-forward)
     (define-key map (kbd "C-c C-b") #'appine-web-go-back)
+    (define-key map [?\s-g] #'appine-find-next)
+    (define-key map [?\s-G] #'appine-find-prev)
+    ;; 绑定 C-c C-n 似乎会中断 find 的过程，导致无法按照预期工作
+    ;; (define-key map (kbd "C-c C-n") #'appine-find-next)
+    ;; (define-key map (kbd "C-c C-p") #'appine-find-prev)
     
     ;; Appine-Window 也支持 Emacs 的常用编辑快捷键
     ;; Meta 键会被被中间某些环节捕获，传递不到 appine_core.m 的 monitor
@@ -529,6 +535,22 @@ Open a file chooser in appine."
   "Go back in Appine Web Backend."
   (interactive)
   (appine-native-web-reload))
+
+(defun appine-find-next ()
+  "Open a new default web tab in appine."
+  (interactive)
+  (when (appine--get-active-window-for-buffer appine--buffer-name)
+    (appine-native-action "findNext")
+    (appine--set-active t)))
+
+(defun appine-find-prev ()
+  "Open a new default web tab in appine."
+  (interactive)
+  (when (appine--get-active-window-for-buffer appine--buffer-name)
+    (appine-native-action "findPrevious")
+    (appine--set-active t)))
+
+
 
 ;;;###autoload
 (defun appine ()

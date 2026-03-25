@@ -46,6 +46,11 @@ typedef NS_ENUM(NSInteger, AppineBackendKind) {
 @optional
 // 可选实现：处理特定的动作（如 copy, paste, undo 等）
 - (void)performAction:(NSString *)actionName;
+// 显示/隐藏页面内查找栏
+- (void)toggleFindBar;
+// - (BOOL)isFindBarVisible;
+- (void)findNext;
+- (void)findPrev;
 
 @end
 

@@ -49,6 +49,19 @@ int appine_core_web_go_forward(void);
 int appine_core_web_go_back(void);
 int appine_core_web_reload(void);
 
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+
+extern BOOL g_appine_debug_log;
+
+#define APPINE_LOG(fmt, ...) do { \
+    if (g_appine_debug_log) { \
+        NSLog((@"[appine] " fmt), ##__VA_ARGS__); \
+    } \
+} while(0)
+#endif
+  
+
 #ifdef __cplusplus
 }
 #endif
